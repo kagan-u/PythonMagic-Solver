@@ -4,6 +4,7 @@ import sys
 import time
 import uuid
 import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -65,8 +66,7 @@ class ClearanceAPIServer:
         self._proxy_index = 0
         self.max_task_num = self.thread_count * self.page_count
 
-        self.app.add_event_handler("startup", self._startup)
-        self.app.add_event_handler("shutdown", self._shutdown)
+        self.app = FastAPI(lifespan=self._lifespan)
         self.app.get("/turnstile")(self.process_turnstile)
         self.app.get("/clearance")(self.process_clearance)
         self.app.get("/result")(self.get_result)
@@ -81,6 +81,12 @@ class ClearanceAPIServer:
     # ──────────────────────────────────────────────
     #  PROXY
     # ──────────────────────────────────────────────
+
+    @asynccontextmanager
+    async def _lifespan(self, app):
+        await self._startup()
+        yield
+        await self._shutdown()
 
     def _load_proxies(self):
         if not self.proxy_support:
